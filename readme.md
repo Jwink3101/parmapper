@@ -1,8 +1,8 @@
-# parmapperper
+# parmapper
 
-`parmapperper` is a simple, easy-to-use, robust way to perform parallel computations with python. It is designed with simplicity and robustness before absolute performance.
+`parmapper` is a simple, easy-to-use, robust way to perform parallel computations with python. It is designed with simplicity and robustness before absolute performance.
 
-When to use `parmapperper`: (*roughly* in order)
+When to use `parmapper`: (*roughly* in order)
 
 * non-pickleable functions such as `lambda` and in some classes
 * common interface to threads and/or proceses
@@ -16,6 +16,14 @@ When **not** to use `parmapper`:
 * absolute performance is key! (`parmapper` has a *slight* overhead but it is minimal)
 * Many successive calls to a `map` that would benefit from a common pool (`parmapper` creates and destroys its pool on each call)
 * Desire for advanced parallel topologies
+
+Tested with python 2.7 and 3.3+
+
+## Install
+
+Install directly from github:
+
+    pip install git+https://github.com/Jwink3101/parmapper
 
 ## Usage
 
@@ -47,7 +55,7 @@ def proc(item):
 results = list(map(proc,items))
 
 # Parallel
-results = list(parmapperper.parmap(proc,items))
+results = list(parmapper.parmap(proc,items))
 ```
 
 The functions can still use variables in scope but they are, for all intents and purposes, read-only. You can only modify them on the
