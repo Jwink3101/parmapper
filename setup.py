@@ -8,7 +8,6 @@ setup(
     name='parmapper',
     py_modules=['parmapper'],
     long_description=open('readme.md').read(),
-    version='2018',
     version='20181101',
     description='simple, robust, parallel mapping function',
     author='Justin Winokur',
