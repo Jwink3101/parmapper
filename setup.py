@@ -5,8 +5,8 @@ from __future__ import division, print_function, unicode_literals, absolute_impo
 from setuptools import setup
 
 setup(
-    name='parmap',
-    py_modules=['parmap'],
+    name='parmapper',
+    py_modules=['parmapper'],
     long_description=open('readme.md').read(),
     version='2018',
     version='20181101',

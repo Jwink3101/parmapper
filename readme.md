@@ -1,8 +1,8 @@
-# parmap
+# parmapperper
 
-`parmap` is a simple, easy-to-use, robust way to perform parallel computations with python. It is designed with simplicity and robustness before absolute performance.
+`parmapperper` is a simple, easy-to-use, robust way to perform parallel computations with python. It is designed with simplicity and robustness before absolute performance.
 
-When to use `parmap`: (*roughly* in order)
+When to use `parmapperper`: (*roughly* in order)
 
 * non-pickleable functions such as `lambda` and in some classes
 * common interface to threads and/or proceses
@@ -11,15 +11,15 @@ When to use `parmap`: (*roughly* in order)
 * no desire for boilerplate code or management of processes and pools
 * integration with tools such as progress bars
 
-When **not** to use `parmap`:
+When **not** to use `parmapper`:
 
-* absolute performance is key! (`parmap` has a *slight* overhead but it is minimal)
-* Many successive calls to a `map` that would benefit from a common pool (`parmap` creates and destroys its pool on each call)
+* absolute performance is key! (`parmapper` has a *slight* overhead but it is minimal)
+* Many successive calls to a `map` that would benefit from a common pool (`parmapper` creates and destroys its pool on each call)
 * Desire for advanced parallel topologies
 
 ## Usage
 
-`parmap` can be used anywhere you would use a regular `imap` or `map` function or a `multiprocessing.Pool().map` (or `imap`, or `starmap`, etc). Note that `parmap` performs *semi*-lazy evaluation. The input sequence is evaluated but results are cached until the `parmap` is iterated. This is the same behavior as `multiprocess.Pool().imap`.
+`parmapper` can be used anywhere you would use a regular `imap` or `map` function or a `multiprocessing.Pool().map` (or `imap`, or `starmap`, etc). Note that `parmapper` performs *semi*-lazy evaluation. The input sequence is evaluated but results are cached until the `parmapper` is iterated. This is the same behavior as `multiprocess.Pool().imap`.
 
 Consider a simple function:
 
@@ -28,7 +28,7 @@ def do_something(item):
     result = ...# Do something time consuming
     return result
 
-results = list(parmap.parmap(do_something,items))
+results = list(parmapper.parmapper(do_something,items))
 ```
 
 You can replace a simple loop as follows:
@@ -47,7 +47,7 @@ def proc(item):
 results = list(map(proc,items))
 
 # Parallel
-results = list(parmap(proc,items))
+results = list(parmapperper.parmap(proc,items))
 ```
 
 The functions can still use variables in scope but they are, for all intents and purposes, read-only. You can only modify them on the
@@ -83,7 +83,7 @@ def do_something(itemA,itemB):
     result = ...# Do something time consuming
     return result
 
-results = list(parmap.parmap(do_something,zip(itemsA,itemsB),star=True))
+results = list(parmapper.parmap(do_something,zip(itemsA,itemsB),star=True))
 ```
 
 Or *changing* keyword arguments
@@ -93,7 +93,7 @@ def do_something(item,opt=False):
     result = ...# Do something time consuming
     return result
 
-results = list(parmap.parmap(do_something,
+results = list(parmapper.parmap(do_something,
                              zip(items,[{'opt':(i%2==0)} for i in range(10)]),
                              kwstar=True))
 ```
@@ -109,7 +109,7 @@ itemsAB = zip(itemsA,itemsB)
 kws = [{'opt':(i%2==0)} for i in range(10)]
 
 
-results = list(parmap.parmap(do_something,zip(itemsAB,kws),
+results = list(parmapper.parmap(do_something,zip(itemsAB,kws),
                              star=True,kwstar=True))
 ```
 
@@ -123,7 +123,7 @@ def do_something(itemA,itemB,itemC,opt=False,opt2=True):
 itemsAB = zip(itemsA,itemsB)
 kws = [{'opt':(i%2==0)} for i in range(10)]
 
-results = list(parmap.parmap(do_something,zip(itemsAB,kws),
+results = list(parmapper.parmap(do_something,zip(itemsAB,kws),
                              star=True,kwstar=True,
                              args=(itemC,),kwargs={'opt2':False}))
 ```
@@ -144,7 +144,7 @@ try:
 except ImportError:
     imap = map
 
-from parmap import parmap
+from parmapper import parmap
 
 data = data_load_generator() 
 data = imap(preprocess,data)
@@ -173,3 +173,6 @@ With the exception of when N == 1 (where it falls back to serial methods) the co
 - The output generator chain is iterated pulling items through and then are yielded. 
 - cleanup and close processes (if/when the input is exhausted)
 
+## Aside: Name Change
+
+I originally named the module `parmap.py` but it has been used before so I changed the top-level module to `parmapper.py` and the function is still `parmap` (with `parmapper=parmap` as a fallback). I *think* I corrected everything but I may have missed a few places

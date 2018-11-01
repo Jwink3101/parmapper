@@ -287,6 +287,8 @@ def parmap(fun,seq,N=None,Nt=1,chunksize=1,ordered=True,\
 parmap.map = parmap.imap = parmap.__call__
 parmap.close = lambda *a,**k:None
 
+parmapper = parmap # Rename
+
 def _counter(items,tot=None):
     for ii,item in enumerate(items):
         if tot is not None:
