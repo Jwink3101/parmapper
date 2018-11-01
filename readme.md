@@ -5,7 +5,7 @@
 When to use `parmapper`: (*roughly* in order)
 
 * non-pickleable functions such as `lambda` and in some classes
-* common interface to threads and/or proceses
+* common interface to threads and/or processes
 * Ability to specify additional arguments and keywords without `partial` or wrappers (though, since you can parallelize `lambda`, this isn't critical)
 * Ability to pass a sequence of keywords (see `kwstar` mode). 
 * no desire for boilerplate code or management of processes and pools
@@ -63,7 +63,7 @@ The functions can still use variables in scope but they are, for all intents and
 
 ## star and kwstar
 
-When `star=True` and `kwstar=False`, this mimicks `map.starmap` where the arguments are passed as `*vals`. This tool also adds `kwstar` mode where it is assumed that each input is a tuple of `(arg,kwarg)` where `arg` respects the `star` settings.
+When `star=True` and `kwstar=False`, this mimics `map.starmap` where the arguments are passed as `*vals`. This tool also adds `kwstar` mode where it is assumed that each input is a tuple of `(arg,kwarg)` where `arg` respects the `star` settings.
 
 Note that this is *in addition* to a *fixed* `args` and `kwargs` keyword.
 
@@ -177,7 +177,7 @@ With the exception of when N == 1 (where it falls back to serial methods) the co
 - Now the main work happens. It is done as chain of generators/iterators. The background worker has already begin adding items to the queue so now we work through the output queue. Note that this is in serial since the work was already done in parallel 
 - Generator to pull from the result queue 
 - Generator to count and display progress (if progress=True). 
-- Generator to hold on to and return items in a sorted manner if sorting is requested. This can cause itermediate results to be stored until they can be returned in order 
+- Generator to hold on to and return items in a sorted manner if sorting is requested. This can cause intermediate results to be stored until they can be returned in order 
 - The output generator chain is iterated pulling items through and then are yielded. 
 - cleanup and close processes (if/when the input is exhausted)
 
