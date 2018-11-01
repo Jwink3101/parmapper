@@ -155,4 +155,21 @@ data = imap(postprocess,data)
 data = list(data)
 ```
 
+In this example `data` is processed as it is generated with the expensive part done in parallel.
+
+## Technical Details
+
+This code uses iterators/generators to handle and distribute the workload. By doing this, it is easy to have all results pass through a common counting function for display of the progress without the use of global (multiprocessing manager) variables and locks.
+
+With the exception of when N == 1 (where it falls back to serial methods) the code works as follows:
+
+- A background thread is started that will iterate over the incoming sequence and add items to the queue. If the incoming sequence is exhausted, the worker sends kill signals into the queue. The items are also chunked and enumerated (used later to sort). 
+- After the background thread is started a function to pull from the OUTPUT queue is created. This counts the number of closed processes but otherwise yields the computed result items 
+- A pool of workers is created. Each worker will read from the input queue and distribute the work amongst threads (if using). It will then return the resuts into a queue 
+- Now the main work happens. It is done as chain of generators/iterators. The background worker has already begin adding items to the queue so now we work through the output queue. Note that this is in serial since the work was already done in parallel 
+- Generator to pull from the result queue 
+- Generator to count and display progress (if progress=True). 
+- Generator to hold on to and return items in a sorted manner if sorting is requested. This can cause itermediate results to be stored until they can be returned in order 
+- The output generator chain is iterated pulling items through and then are yielded. 
+- cleanup and close processes (if/when the input is exhausted)
 
