@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, unicode_literals
 
-__version__ = '20181101'
+__version__ = '20181102'
 
 import multiprocessing as mp
 import multiprocessing.dummy as mpd
@@ -32,10 +32,17 @@ else:
 
 CPU_COUNT = mp.cpu_count()
 
+class _Exception:
+    """Storage of an exception"""
+    def __init__(self,E,infun=True):
+        self.E = E
+        self.infun = infun
+
 def parmap(fun,seq,N=None,Nt=1,chunksize=1,ordered=True,\
                 daemon=False,progress=False,
                 args=(),kwargs=None,
-                star=False,kwstar=False):
+                star=False,kwstar=False,
+                exception='raise'):
     """
     parmap -- Simple parallel mapper that can split amongst processes (N)
               and threads (Nt) (within the processes).
@@ -99,8 +106,19 @@ def parmap(fun,seq,N=None,Nt=1,chunksize=1,ordered=True,\
         Assumes all items are (seqargs,seqkwargs) where `args` RESPECTS `star` 
         setting and still includes `args` and `kwargs`. See 
         "Additional Arguments" below.
+    
+    exception:
+        Choose how to handle an exception in a child process
         
-
+        'raise'     : [Default] raise the exception (outside of the Process). 
+                      Also terminates all existing processes.
+        'return'    : Return the Exception instead of raising it.
+        'proc'      : Raise the exception inside the process. NOT RECOMMENDED
+                      unless used in debugging.
+        
+        Note: An additional attribute called `seq_index` will also be set
+              in the exception (whether raised or returned) to aid in debugging.
+        
     Additional Arguments
     --------------------
     As noted above, there are many ways to pass additional arguments to
@@ -169,7 +187,7 @@ def parmap(fun,seq,N=None,Nt=1,chunksize=1,ordered=True,\
 
     Last Updated:
     -------------
-    2018-11-01
+    2018-11-02
     """
     
     # Build up a dummy function with args,vals,kwargs, and kwvals
@@ -177,18 +195,31 @@ def parmap(fun,seq,N=None,Nt=1,chunksize=1,ordered=True,\
         kwargs = {}
     
     def _fun(ss):
-        if kwstar:
-            _args,_kwargs = ss # Will raise a ValueError if too many args. User error!
-        else:
-            _args = ss
-            _kwargs = {}
-        if star:
-            _args = _args + args
-        else:
-            _args = ((_args,) + args)
-        kw = kwargs.copy() # from function call
-        kw.update(_kwargs)
-        return fun(*_args,**kw)
+        try:
+            if kwstar:
+                _args,_kwargs = ss # Will raise a ValueError if too many args. User error!
+            else:
+                _args = ss
+                _kwargs = {}
+            if star:
+                _args = _args + args
+            else:
+                _args = ((_args,) + args)
+            kw = kwargs.copy() # from function call
+            kw.update(_kwargs)
+        except TypeError: # Mostly because bad input types
+            return _Exception(TypeError('Ensure `args` are tuples and `kwargs` are dicts'),infun=False)
+        except Exception as E:
+            return _Exception(E,infun=False)
+        
+        try:
+            return fun(*_args,**kw)
+        except Exception as E:
+            if exception == 'proc': # Why would anyone want this?
+                raise E
+            return _Exception(E)
+            # It would be great to include all of sys.exc_info() but tracebacks
+            # cannot be pickled.
             
     N = CPU_COUNT if N is None else N
     chunksize = max(chunksize,Nt)
@@ -275,7 +306,26 @@ def parmap(fun,seq,N=None,Nt=1,chunksize=1,ordered=True,\
 
     # Return items
     for item in out:
-        yield item[1]
+        count = item[0]
+        item = item[1]
+        if isinstance(item,_Exception):
+            item.E.seq_index = count
+            if not item.infun:
+                exception = 'raise' # reset
+                
+            if exception == 'raise':
+                for worker in workers: 
+                    worker.terminate()
+                raise item.E
+            elif exception == 'return':
+                item = item.E
+            elif exception == 'proc':
+                pass
+            else:
+                for worker in workers: 
+                    worker.terminate()
+                raise ValueError("Unrecognized `exception` setting '{}'".format(exception))
+        yield item
     
     # Clean up
     q_in.join() # Make sure there is nothing left in the queue
@@ -305,7 +355,6 @@ def _counter_nb(items,tot=None):
     
     if tot is not None:
         g = IntText(value=0,description='total = %d' % tot)
-    
         f = IntProgress(min=0,max=tot)
         display(f)
         g.desription='hi'
