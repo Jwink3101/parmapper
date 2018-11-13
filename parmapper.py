@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, unicode_literals
 
-__version__ = '20181102'
+__version__ = '20181113'
 
 import multiprocessing as mp
 import multiprocessing.dummy as mpd
@@ -114,7 +114,7 @@ def parmap(fun,seq,N=None,Nt=1,chunksize=1,ordered=True,\
                       Also terminates all existing processes.
         'return'    : Return the Exception instead of raising it.
         'proc'      : Raise the exception inside the process. NOT RECOMMENDED
-                      unless used in debugging.
+                      unless used in debugging (and with N=1)
         
         Note: An additional attribute called `seq_index` will also be set
               in the exception (whether raised or returned) to aid in debugging.
@@ -211,12 +211,11 @@ def parmap(fun,seq,N=None,Nt=1,chunksize=1,ordered=True,\
             return _Exception(TypeError('Ensure `args` are tuples and `kwargs` are dicts'),infun=False)
         except Exception as E:
             return _Exception(E,infun=False)
-        
+        if exception == 'proc':
+            return fun(*_args,**kw) # Outside of a try
         try:
             return fun(*_args,**kw)
         except Exception as E:
-            if exception == 'proc': # Why would anyone want this?
-                raise E
             return _Exception(E)
             # It would be great to include all of sys.exc_info() but tracebacks
             # cannot be pickled.
@@ -254,7 +253,19 @@ def parmap(fun,seq,N=None,Nt=1,chunksize=1,ordered=True,\
 
         if progress:
            out = counter(out)
-        for item in out:
+        for count,item in enumerate(out):
+            if isinstance(item,_Exception):
+                item.E.seq_index = count
+                if not item.infun:
+                    exception = 'raise' # reset
+                if exception == 'raise':
+                    raise item.E
+                elif exception == 'return':
+                    item = item.E
+                elif exception == 'proc':
+                    pass
+                else:
+                    raise ValueError("Unrecognized `exception` setting '{}'".format(exception))
             yield item
 
         if Nt > 1:
