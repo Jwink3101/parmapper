@@ -1,8 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+"""
+parmap (or parmapper): Tool for easy parallel function mapping
+without requiring a pickleable function (e.g. lambdas).
+"""
 from __future__ import print_function, unicode_literals
 
-__version__ = '20181113'
+__version__ = '20181204'
 
 import multiprocessing as mp
 import multiprocessing.dummy as mpd
@@ -33,7 +37,7 @@ else:
 CPU_COUNT = mp.cpu_count()
 
 class _Exception:
-    """Storage of an exception"""
+    """Storage of an exception (and easy detection)"""
     def __init__(self,E,infun=True):
         self.E = E
         self.infun = infun
@@ -42,7 +46,7 @@ def parmap(fun,seq,N=None,Nt=1,chunksize=1,ordered=True,\
                 daemon=False,progress=False,
                 args=(),kwargs=None,
                 star=False,kwstar=False,
-                exception='raise'):
+                exception=None):
     """
     parmap -- Simple parallel mapper that can split amongst processes (N)
               and threads (Nt) (within the processes).
@@ -107,7 +111,7 @@ def parmap(fun,seq,N=None,Nt=1,chunksize=1,ordered=True,\
         setting and still includes `args` and `kwargs`. See 
         "Additional Arguments" below.
     
-    exception:
+    exception ['raise' if N>1 else 'proc']
         Choose how to handle an exception in a child process
         
         'raise'     : [Default] raise the exception (outside of the Process). 
@@ -128,6 +132,7 @@ def parmap(fun,seq,N=None,Nt=1,chunksize=1,ordered=True,\
     Assume the following function:
     
         def dj(dictA,dictB):
+            '''Join dictA and dictB where dictB takes precedence'''
             dictA = dictA.copy()
             dictA.update(dictB) # NOTE: dictB takes precedence
             return dictA
@@ -185,9 +190,10 @@ def parmap(fun,seq,N=None,Nt=1,chunksize=1,ordered=True,\
     `close = lamba *a,**k:None` are also added so a parmap function can mimic
     a multiprocessing pool.
 
-    Last Updated:
-    -------------
-    2018-11-02
+    Version:
+    -------
+    __version__
+    
     """
     
     # Build up a dummy function with args,vals,kwargs, and kwvals
@@ -222,6 +228,9 @@ def parmap(fun,seq,N=None,Nt=1,chunksize=1,ordered=True,\
             
     N = CPU_COUNT if N is None else N
     chunksize = max(chunksize,Nt)
+    
+    if exception is None:
+        exception = 'raise' if N>1 else 'proc'
 
     try:
         tot = len(seq)
@@ -347,6 +356,7 @@ def parmap(fun,seq,N=None,Nt=1,chunksize=1,ordered=True,\
 # Add dummy methods
 parmap.map = parmap.imap = parmap.__call__
 parmap.close = lambda *a,**k:None
+parmap.__doc__ = parmap.__doc__.replace('__version__',__version__)
 
 parmapper = parmap # Rename
 
