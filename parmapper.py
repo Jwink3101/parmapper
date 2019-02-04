@@ -6,7 +6,7 @@ without requiring a pickleable function (e.g. lambdas).
 """
 from __future__ import print_function, unicode_literals
 
-__version__ = '20181204'
+__version__ = '20190204'
 
 import multiprocessing as mp
 import multiprocessing.dummy as mpd
@@ -101,15 +101,13 @@ def parmap(fun,seq,N=None,Nt=1,chunksize=1,ordered=True,\
     star [False]
         If True, the arguments to the function will be "starred" so, for example
         if `seq = [ (1,2), (3,4) ]`, the function will be called as
-            star == True
-                fun((1,2))
-            star == False
-                fun(1,2) <==> fun(*(1,2))
+            star is False: fun((1,2))
+            star is True:  fun(1,2) <==> fun(*(1,2))
         
     kwstar [False]
-        Assumes all items are (seqargs,seqkwargs) where `args` RESPECTS `star` 
-        setting and still includes `args` and `kwargs`. See 
-        "Additional Arguments" below.
+        Assumes all items are (vals,kwvals) where `vals` RESPECTS `star` 
+        setting and still includes `args` and `kwvals`. See "Additional 
+        Arguments" section below.
     
     exception ['raise' if N>1 else 'proc']
         Choose how to handle an exception in a child process
@@ -138,18 +136,18 @@ def parmap(fun,seq,N=None,Nt=1,chunksize=1,ordered=True,\
             return dictA
 
     Then the behavior is as follows where `args` and `kwargs` come from
-    they main function call. `args` and `kwargs` are those set in the
-    function call. `val` (singular), `vals` (sequance of values) and `kwvals`
-    are set per iterated.
+    they main function call. The `val` (singular), `vals` (sequence/tuple of 
+    values), and `kwvals` are set via the sequence.
     
     | star  | kwstar | expected item | function args  | function keywords   |
     |-------|--------|---------------|----------------|---------------------|
-    | False | False  | val           | *((val,)+args) | **kwargs            |
+    | False | False  | val           | *((val,)+args) | **kwargs            |†
     | True  | False  | vals          | *(vals+args)   | **kwargs            |
-    | False | True   | val,kwval     | *((val,)+args) | **dj(kwargs,kwvals) |+
-    | True  | True   | vals,kwval    | *(vals+args)   | **dj(kwargs,kwvals) |+
+    | False | True   | val,kwval     | *((val,)+args) | **dj(kwargs,kwvals) |‡
+    | True  | True   | vals,kwval    | *(vals+args)   | **dj(kwargs,kwvals) |‡
                                                         
-                + Note the ordering so kwvals takes precedance
+                † Default
+                ‡ Note the ordering so kwvals takes precedance
 
     Note:
     ------
@@ -169,7 +167,7 @@ def parmap(fun,seq,N=None,Nt=1,chunksize=1,ordered=True,\
     bound tasks and threading is good for those that release the GIL (such
     as IO-bound tasks). 
     
-    WARNING: many NumPy functions *do* release the GIL and can be threaded, 
+    WARNING: Many NumPy functions *do* release the GIL and can be threaded, 
              but many NumPy functions are, themselves, multi-threaded.
 
     Alternatives:
@@ -188,7 +186,7 @@ def parmap(fun,seq,N=None,Nt=1,chunksize=1,ordered=True,\
     ---------------
     For the sake of convienance, a `map=imap=__call__` and
     `close = lamba *a,**k:None` are also added so a parmap function can mimic
-    a multiprocessing pool.
+    a multiprocessing pool object with duck typing
 
     Version:
     -------

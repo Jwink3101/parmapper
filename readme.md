@@ -63,24 +63,33 @@ The functions can still use variables in scope but they are, for all intents and
 
 ## star and kwstar
 
-When `star=True` and `kwstar=False`, this mimics `map.starmap` where the arguments are passed as `*vals`. This tool also adds `kwstar` mode where it is assumed that each input is a tuple of `(arg,kwarg)` where `arg` respects the `star` settings.
+As noted above, there are many ways to pass additional arguments to
+your function. All of these are not completely needed since parmap
+makes using lambdas so easy, but they are there if preffered.
 
-Note that this is *in addition* to a *fixed* `args` and `kwargs` keyword.
+Assume the following function:
 
-In this let
 ```python
 def dj(dictA,dictB):
+    '''Join dictA and dictB where dictB takes precedence'''
     dictA = dictA.copy()
-    dictA.update(dictB) # dictB takes precedence
+    dictA.update(dictB) # NOTE: dictB takes precedence
     return dictA
 ```
 
-| star  | kwstar | expected item | function `*args` | function `**kwargs`   |
-|-------|--------|---------------|------------------|-----------------------|
-| False | False  | `val`         | `*((val,)+args)` | `**kwargs`            |
-| True  | False  | `vals`        | `*(vals+args)`   | `**kwargs`            |
-| False | True   | `val,kwval`   | `*((val,)+args)` | `**dj(kwargs,kwvals)` |
-| True  | True   | `vals,kwval`  | `*(vals+args)`   | `**dj(kwargs,kwvals)` |
+Then the behavior is as follows where `args` and `kwargs` come from
+they main function call. The `val` (singular), `vals` (sequence/tuple of 
+values), and `kwvals` are set via the sequence.
+
+| star  | kwstar | expected item | function args    | function keywords       |
+|-------|--------|---------------|------------------|-------------------------|
+| False | False  | `val`         | `*((val,)+args)` | `**kwargs`            † |
+| True  | False  | `vals`        | `*(vals+args)`   | `**kwargs`              |
+| False | True   | `val,kwval`   | `*((val,)+args)` | `**dj(kwargs,kwvals)` ‡ |
+| True  | True   | `vals,kwval`  | `*(vals+args)`   | `**dj(kwargs,kwvals)` ‡ |                                                        
+
+* † Default
+* ‡ Note the ordering so kwvals takes precedance
 
 Consider the following:
 
