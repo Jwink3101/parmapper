@@ -535,6 +535,7 @@ the code works as follows:
 """
 
 np = None # will be imported when a ParEval is instantiated
+
 class ParEval:
     """
     Evaluate the *vectoorized* fun(X) (where X is a numpy array) in chunks 
@@ -568,8 +569,8 @@ class ParEval:
     """
     
     def __init__(self,fun,n_chunks=None,n_eval=None,n_min=0,**kwargs):
+        global np
         if np is None:
-            global np
             import numpy as np
         
         self.fun = fun
@@ -600,8 +601,8 @@ class ParEval:
     
         Otherwise, just return it
         """
+        global np
         if np is None:
-            global np
             import numpy as np
             
         x = np.asarray(x,dtype=dtype)
@@ -619,8 +620,8 @@ class ParEval:
 class _chunker:
     """Object to actually break into chunks and has a __len__"""
     def __init__(self,X,n_chunks=None,n_eval=None,n_min=0):
+        global np
         if np is None:
-            global np
             import numpy as np
         self.X = X = np.atleast_1d(X)
         n = len(X)
