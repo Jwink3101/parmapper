@@ -6,7 +6,7 @@ without requiring a pickleable function (e.g. lambdas).
 """
 from __future__ import print_function, unicode_literals
 
-__version__ = '20190204'
+__version__ = '20190311'
 
 import multiprocessing as mp
 import multiprocessing.dummy as mpd
@@ -533,3 +533,125 @@ the code works as follows:
   are yielded.
 - cleanup and close processes (if/when the input is exhausted)
 """
+
+np = None # will be imported when a ParEval is instantiated
+class ParEval:
+    """
+    Evaluate the *vectoorized* fun(X) (where X is a numpy array) in chunks 
+    using parmap. If fun(X) is not vectorized, use the regular parmap
+    
+    Requires numpy
+    
+    Inputs:
+    -------
+    fun
+        Function to call. Use parmap keywords (e.g. args,kwargs,star) to
+        add and/or control function call.
+    
+    Specify one of
+        n_chunks
+            How many chunks to split it up into
+        n_eval
+            How many evaluations per chunk (and split accordingly). Will be
+            the upper limit.
+        if neither is specified, then n_chunks is set to CPU_COUNT
+    
+    Options:
+    -------
+    n_min [0]
+        Minimum size for a chunk. Will also override n_eval 
+        (since n_eval gets convered to n_chunks)
+        
+    All additional options are passed to parmap   
+    
+    Splits along the first axis.
+    """
+    
+    def __init__(self,fun,n_chunks=None,n_eval=None,n_min=0,**kwargs):
+        if np is None:
+            global np
+            import numpy as np
+        
+        self.fun = fun
+        if (n_chunks is not None) and (n_eval is not None):
+            raise ValueError('Must specify EITHER n_chunks OR n_eval')
+        if n_chunks is None and n_eval is None:
+            n_chunks = CPU_COUNT
+        self.n_chunks = n_chunks
+        self.n_eval = n_eval
+        
+        self.n_min = n_min
+        self.kwargs = kwargs
+        
+    def __call__(self,X):
+        chunker = _chunker(X,
+                                n_chunks=self.n_chunks,
+                                n_eval=self.n_eval,
+                                n_min=self.n_min)
+        print(len(chunker))
+        res = list(parmap(self.fun,chunker,**self.kwargs))
+        return np.concatenate(res)
+    
+    @staticmethod
+    def vec2col(x,dtype=None,return_oneD=False):
+        """
+        If x is 1D, convert it to a column vector. If return_oneD, will
+        also return whether or not the input was 1D.
+    
+        Otherwise, just return it
+        """
+        if np is None:
+            global np
+            import numpy as np
+            
+        x = np.asarray(x,dtype=dtype)
+    
+        if len(x.shape) > 1:
+            oneD = False
+        else:
+            x = np.atleast_2d(x).T
+            oneD = True
+    
+        if return_oneD:
+            return x,oneD
+        return x
+        
+class _chunker:
+    """Object to actually break into chunks and has a __len__"""
+    def __init__(self,X,n_chunks=None,n_eval=None,n_min=0):
+        if np is None:
+            global np
+            import numpy as np
+        self.X = X = np.atleast_1d(X)
+        n = len(X)
+        # Get number of chunks
+        if n_eval is not None:
+            n_eval = max(n_min,n_eval)
+            n_chunks = int(np.ceil(n/n_eval))
+        if n_chunks is not None:
+            n_chunks = n_chunks
+            if n // n_chunks < n_min:
+                n_chunks = n // n_min
+        
+        stops = np.asarray([n // n_chunks]*n_chunks,dtype=int)
+        stops[:n % n_chunks] += 1
+        self.stops = stops = np.cumsum(stops).tolist()
+        self.len = len(stops)
+    
+        self.ii = 0
+    
+    def __next__(self):
+        ii = self.ii
+        if ii == self.len:
+            raise StopIteration()
+        a = 0 if ii == 0 else self.stops[ii-1]
+        b = self.stops[ii]
+        self.ii += 1
+        return self.X[a:b]
+    next = __next__
+    def __iter__(self):
+        return self
+
+    def __len__(self):
+        return self.len
+    
