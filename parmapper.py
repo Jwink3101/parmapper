@@ -6,7 +6,7 @@ without requiring a pickleable function (e.g. lambdas).
 """
 from __future__ import print_function, unicode_literals
 
-__version__ = '20190311'
+__version__ = '20190409'
 
 import multiprocessing as mp
 import multiprocessing.dummy as mpd
@@ -36,7 +36,7 @@ else:
 
 CPU_COUNT = mp.cpu_count()
 
-class _Exception:
+class _Exception(object):
     """Storage of an exception (and easy detection)"""
     def __init__(self,E,infun=True):
         self.E = E
@@ -103,6 +103,7 @@ def parmap(fun,seq,N=None,Nt=1,chunksize=1,ordered=True,\
         if `seq = [ (1,2), (3,4) ]`, the function will be called as
             star is False: fun((1,2))
             star is True:  fun(1,2) <==> fun(*(1,2))
+        Can also set to None to not send anything
         
     kwstar [False]
         Assumes all items are (vals,kwvals) where `vals` RESPECTS `star` 
@@ -143,6 +144,7 @@ def parmap(fun,seq,N=None,Nt=1,chunksize=1,ordered=True,\
     |-------|--------|---------------|----------------|---------------------|
     | False | False  | val           | *((val,)+args) | **kwargs            |†
     | True  | False  | vals          | *(vals+args)   | **kwargs            |
+    | None  | True   | kwval         | *args          | **dj(kwargs,kwvals) |‡
     | False | True   | val,kwval     | *((val,)+args) | **dj(kwargs,kwvals) |‡
     | True  | True   | vals,kwval    | *(vals+args)   | **dj(kwargs,kwvals) |‡
                                                         
@@ -197,28 +199,36 @@ def parmap(fun,seq,N=None,Nt=1,chunksize=1,ordered=True,\
     # Build up a dummy function with args,vals,kwargs, and kwvals
     if kwargs is None:
         kwargs = {}
-    
+
     def _fun(ss):
+        _args = list(args)
+        _kw = kwargs.copy()
         try:
-            if kwstar:
-                _args,_kwargs = ss # Will raise a ValueError if too many args. User error!
+            # Check for None before boolean
+            if star is None and kwstar:     # 3
+                _kw.update(ss)
+            elif not star and not kwstar:   # 1
+                _args = [ss] + _args
+            elif star and not kwstar:       # 2
+                _args = list(ss) + _args    
+            elif not star and kwstar:       # 4
+                _args = [ss[0]] + _args
+                _kw.update(ss[1])
+            elif star and kwstar:           # 5
+                _args = list(ss[0]) + _args
+                _kw.update(ss[1])
             else:
-                _args = ss
-                _kwargs = {}
-            if star:
-                _args = _args + args
-            else:
-                _args = ((_args,) + args)
-            kw = kwargs.copy() # from function call
-            kw.update(_kwargs)
+                raise TypeError()
+            
         except TypeError: # Mostly because bad input types
             return _Exception(TypeError('Ensure `args` are tuples and `kwargs` are dicts'),infun=False)
         except Exception as E:
             return _Exception(E,infun=False)
+        
         if exception == 'proc':
-            return fun(*_args,**kw) # Outside of a try
+            return fun(*_args,**_kw) # Outside of a try
         try:
-            return fun(*_args,**kw)
+            return fun(*_args,**_kw)
         except Exception as E:
             return _Exception(E)
             # It would be great to include all of sys.exc_info() but tracebacks
@@ -536,7 +546,7 @@ the code works as follows:
 
 np = None # will be imported when a ParEval is instantiated
 
-class ParEval:
+class ParEval(object):
     """
     Evaluate the *vectoorized* fun(X) (where X is a numpy array) in chunks 
     using parmap. If fun(X) is not vectorized, use the regular parmap
@@ -560,7 +570,7 @@ class ParEval:
     Options:
     -------
     n_min [0]
-        Minimum size for a chunk. Will also override n_eval 
+        Minimum size for a chunk. Will also override n_eval if needed 
         (since n_eval gets convered to n_chunks)
         
     All additional options are passed to parmap   
@@ -585,11 +595,9 @@ class ParEval:
         self.kwargs = kwargs
         
     def __call__(self,X):
-        chunker = _chunker(X,
-                                n_chunks=self.n_chunks,
-                                n_eval=self.n_eval,
-                                n_min=self.n_min)
-        print(len(chunker))
+        chunker = _chunker(X,n_chunks=self.n_chunks,
+                             n_eval=self.n_eval,
+                             n_min=self.n_min)
         res = list(parmap(self.fun,chunker,**self.kwargs))
         return np.concatenate(res)
     
@@ -617,7 +625,7 @@ class ParEval:
             return x,oneD
         return x
         
-class _chunker:
+class _chunker(object):
     """Object to actually break into chunks and has a __len__"""
     def __init__(self,X,n_chunks=None,n_eval=None,n_min=0):
         global np
