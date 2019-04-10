@@ -6,7 +6,7 @@ without requiring a pickleable function (e.g. lambdas).
 """
 from __future__ import print_function, unicode_literals
 
-__version__ = '20190409'
+__version__ = '20190410'
 
 import multiprocessing as mp
 import multiprocessing.dummy as mpd
@@ -144,11 +144,13 @@ def parmap(fun,seq,N=None,Nt=1,chunksize=1,ordered=True,\
     |-------|--------|---------------|----------------|---------------------|
     | False | False  | val           | *((val,)+args) | **kwargs            |†
     | True  | False  | vals          | *(vals+args)   | **kwargs            |
-    | None  | True   | kwval         | *args          | **dj(kwargs,kwvals) |‡
+    | None  | False  | ---           | *args          | **kwargs            |°
+    | None  | True   | ---           | *args          | **dj(kwargs,kwvals) |‡
     | False | True   | val,kwval     | *((val,)+args) | **dj(kwargs,kwvals) |‡
     | True  | True   | vals,kwval    | *(vals+args)   | **dj(kwargs,kwvals) |‡
                                                         
                 † Default
+                ° If kwargs and args are empty, basically calls with nothing
                 ‡ Note the ordering so kwvals takes precedance
 
     Note:
@@ -205,16 +207,18 @@ def parmap(fun,seq,N=None,Nt=1,chunksize=1,ordered=True,\
         _kw = kwargs.copy()
         try:
             # Check for None before boolean
-            if star is None and kwstar:     # 3
+            if star is None and kwstar:     # 4
                 _kw.update(ss)
+            elif star is None and not kwstar: # 3
+                pass
             elif not star and not kwstar:   # 1
                 _args = [ss] + _args
             elif star and not kwstar:       # 2
                 _args = list(ss) + _args    
-            elif not star and kwstar:       # 4
+            elif not star and kwstar:       # 5
                 _args = [ss[0]] + _args
                 _kw.update(ss[1])
-            elif star and kwstar:           # 5
+            elif star and kwstar:           # 6
                 _args = list(ss[0]) + _args
                 _kw.update(ss[1])
             else:
@@ -600,30 +604,6 @@ class ParEval(object):
                              n_min=self.n_min)
         res = list(parmap(self.fun,chunker,**self.kwargs))
         return np.concatenate(res)
-    
-    @staticmethod
-    def vec2col(x,dtype=None,return_oneD=False):
-        """
-        If x is 1D, convert it to a column vector. If return_oneD, will
-        also return whether or not the input was 1D.
-    
-        Otherwise, just return it
-        """
-        global np
-        if np is None:
-            import numpy as np
-            
-        x = np.asarray(x,dtype=dtype)
-    
-        if len(x.shape) > 1:
-            oneD = False
-        else:
-            x = np.atleast_2d(x).T
-            oneD = True
-    
-        if return_oneD:
-            return x,oneD
-        return x
         
 class _chunker(object):
     """Object to actually break into chunks and has a __len__"""
