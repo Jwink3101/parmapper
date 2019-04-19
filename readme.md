@@ -63,9 +63,7 @@ The functions can still use variables in scope but they are, for all intents and
 
 ## star and kwstar
 
-As noted above, there are many ways to pass additional arguments to
-your function. All of these are not completely needed since parmap
-makes using lambdas so easy, but they are there if preffered.
+As noted above, there are many ways to pass additional arguments to your function. All of these are not completely needed since parmap makes using lambdas so easy, but they are there if preffered.
 
 Assume the following function:
 
@@ -77,19 +75,21 @@ def dj(dictA,dictB):
     return dictA
 ```
 
-Then the behavior is as follows where `args` and `kwargs` come from
-they main function call. The `val` (singular), `vals` (sequence/tuple of 
-values), and `kwvals` are set via the sequence.
+Then the behavior is as follows where `args` and `kwargs` come from they main function call. The `val` (singular), `vals` (sequence/tuple of  values), and `kwvals` are set via the sequence.
 
-| star  | kwstar | expected item | function args    | function keywords       |
-|-------|--------|---------------|------------------|-------------------------|
-| False | False  | `val`         | `*((val,)+args)` | `**kwargs`            † |
-| True  | False  | `vals`        | `*(vals+args)`   | `**kwargs`              |
-| False | True   | `val,kwval`   | `*((val,)+args)` | `**dj(kwargs,kwvals)` ‡ |
-| True  | True   | `vals,kwval`  | `*(vals+args)`   | `**dj(kwargs,kwvals)` ‡ |                                                        
+| star  | kwstar | expected item | function args  | function keywords    |
+|-------|--------|---------------|----------------|----------------------|
+| False | False  | val           | *((val,)+args) | **kwargs            †|
+| True  | False  | vals          | *(vals+args)   | **kwargs             |
+| None  | False  | ---           | *args          | **kwargs            °|
+| None  | True   | ---           | *args          | **dj(kwargs,kwvals) ‡|
+| False | True   | val,kwval     | *((val,)+args) | **dj(kwargs,kwvals) ‡|
+| True  | True   | vals,kwval    | *(vals+args)   | **dj(kwargs,kwvals) ‡|                                                     
 
 * † Default
+* ° If kwargs and args are empty, basically calls with nothing
 * ‡ Note the ordering so kwvals takes precedance
+
 
 Consider the following:
 
