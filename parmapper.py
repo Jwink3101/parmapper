@@ -4,9 +4,9 @@
 parmap (or parmapper): Tool for easy parallel function mapping
 without requiring a pickleable function (e.g. lambdas).
 """
-from __future__ import print_function, unicode_literals
+from __future__ import print_function, unicode_literals, division
 
-__version__ = '20190410'
+__version__ = '20190531'
 
 import multiprocessing as mp
 import multiprocessing.dummy as mpd
@@ -14,6 +14,8 @@ from threading import Thread
 import threading
 import sys
 from collections import defaultdict
+import warnings
+import math
 
 try:
     from queue import Queue
@@ -60,7 +62,7 @@ def parmap(fun,seq,N=None,Nt=1,chunksize=1,ordered=True,\
         Single input function. Use lambdas or functools.partial
         to enable/exapnd multi-input. See example
 
-    sequence
+    seq
         Sequence of inputs to map in parallel
 
     Options:
@@ -74,7 +76,13 @@ def parmap(fun,seq,N=None,Nt=1,chunksize=1,ordered=True,\
 
     chunksize [1] (int)
         How to be break up the incoming sequence. Useful if also using threads.
-        Will be (re)set to max(chunksize,Nt)
+        Will be (re)set to max(chunksize,Nt). 
+        
+        Alternativly, if len(seq) exists and chunksize=-1 it will be reset
+        to ceil(len(seq)/(N*Nt)). If chunksize=-1 and len(sequence) is not
+        known, a warning will be emitted and chucksize will be reset to 
+        max(chunksize,Nt)
+        
 
     ordered [True] (bool)
         Whether or not to order the results. If False, will return in whatever
@@ -238,16 +246,26 @@ def parmap(fun,seq,N=None,Nt=1,chunksize=1,ordered=True,\
             # It would be great to include all of sys.exc_info() but tracebacks
             # cannot be pickled.
             
-    N = CPU_COUNT if N is None else N
-    chunksize = max(chunksize,Nt)
-    
-    if exception is None:
-        exception = 'raise' if N>1 else 'proc'
-
     try:
         tot = len(seq)
     except TypeError:
         tot = None
+
+    N = CPU_COUNT if N is None else N
+        
+    if exception is None:
+        exception = 'raise' if N>1 else 'proc'
+
+    if chunksize == -1:
+        if tot is None:
+            warnings.warn('chunksize=-1 does not work when len(seq) is not known')
+        else:
+            chunksize = math.ceil(tot/(N*Nt))
+    chunksize = max(chunksize,Nt) # Reset
+
+    # Consider resetting N
+    if tot is not None:
+        N = min(N,tot//chunksize)
 
     # Build a counter iterator based on settings and tqdm
     if tqdm is None:
