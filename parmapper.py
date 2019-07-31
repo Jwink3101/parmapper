@@ -315,12 +315,10 @@ def parmap(fun,seq,N=None,Nt=1,chunksize=1,ordered=True,\
     q_out = mp.Queue()
 
     # Start the workers
-    workers = []
-    for _ in range(N):
-        worker = mp.Process(target=_worker, args=(_fun, q_in, q_out,Nt))
+    workers = [mp.Process(target=_worker, args=(_fun, q_in, q_out,Nt)) for _ in range(N)]
+    for worker in workers:
         worker.daemon = daemon
         worker.start()
-        workers.append(worker)
 
     # Create a separate thread to add to the queue in the background
     def add_to_queue():
@@ -377,7 +375,8 @@ def parmap(fun,seq,N=None,Nt=1,chunksize=1,ordered=True,\
                 raise ValueError("Unrecognized `exception` setting '{}'".format(exception))
         yield item
     
-    # Clean up
+    # Clean up threads and processes. Make sure the queue is exhausted
+    add_to_queue_thread.join() # Make sure we've exhausted the input
     q_in.join() # Make sure there is nothing left in the queue
     for worker in workers:
         worker.join() # shut it down
@@ -661,4 +660,64 @@ class _chunker(object):
 
     def __len__(self):
         return self.len
-    
+
+################################################################################
+################################################################################
+## Below is a simpler version of parmap. It really only serves the purpose of 
+## being used to copy/paste when a short-and-sweet parmap is needed in a 
+## function or method and you do not want to require parmap(per).py
+## 
+## It is basically *just* for reference
+################################################################################
+################################################################################
+
+
+# def simple_parmap(fun,seq,N=None,daemon=True):
+#     """
+#     Simple, bare-bones parallel map function similar to parmap
+#     (or parmapper [1]) except much, much simpler. It lacks all 
+#     bells and whistles but *does* perform parallel mapping
+#     
+#     Note: This always returns a list and not an iterator!
+#           And will not return until all computation is complete
+#     
+#     Use parmap if it is availible. 
+#     
+#     Inspired by [2]
+#     
+#     [1]:https://github.com/Jwink3101/parmapper
+#     [2]:https://stackoverflow.com/a/16071616/3633154
+#     """
+#     import multiprocessing as mp
+#     if N is None:
+#         N = mp.cpu_count()
+#     def _fun(fun, q_in, q_out):
+#         while True:
+#             i, x = q_in.get()
+#             if i is None:
+#                 q_in.task_done()
+#                 break
+#             q_out.put((i, fun(x)))
+#             q_in.task_done()
+#     
+#     q_in,q_out = mp.JoinableQueue(),mp.Queue()
+#     
+#     proc = [mp.Process(target=_fun, args=(fun, q_in, q_out)) for _ in range(N)]
+#     for p in proc: 
+#         p.daemon=daemon
+#         p.start()
+#     
+#     count = 0
+#     for ii,x in enumerate(seq):
+#         q_in.put((ii,x))
+#         count += 1 
+#     
+#     for _ in range(N): q_in.put((None,None))
+#     res = [q_out.get() for _ in range(count)]
+#     
+#     q_in.join()
+#     for p in proc: p.join()
+# 
+#     return [x for i, x in sorted(res)]
+
+
