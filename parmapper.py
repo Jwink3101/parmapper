@@ -6,7 +6,7 @@ without requiring a pickleable function (e.g. lambdas).
 """
 from __future__ import print_function, unicode_literals, division
 
-__version__ = '20190531'
+__version__ = '20191002'
 
 import multiprocessing as mp
 import multiprocessing.dummy as mpd
@@ -205,7 +205,6 @@ def parmap(fun,seq,N=None,Nt=1,chunksize=1,ordered=True,\
     __version__
     
     """
-    
     # Build up a dummy function with args,vals,kwargs, and kwvals
     if kwargs is None:
         kwargs = {}
@@ -342,7 +341,8 @@ def parmap(fun,seq,N=None,Nt=1,chunksize=1,ordered=True,\
             if out is None:
                 finished += 1
                 continue
-            yield out
+            for o in out: # yield from out
+                yield o
 
     # Chain generators on output
     out = queue_getter()
@@ -437,8 +437,9 @@ def _worker(fun,q_in,q_out,Nt):
 #         for ix in iixs:
         def _ap(ix):
             i,x = ix
-            q_out.put((i, fun(x)))
-        list(_map(_ap,iixs)) # list forces the iteration
+            return i, fun(x)
+        res = tuple(_map(_ap,iixs)) # list forces the iteration
+        q_out.put(res)
         q_in.task_done()
 
     if Nt >1:
@@ -574,6 +575,18 @@ class ParEval(object):
     
     Requires numpy
     
+    Usage:
+    ------
+    
+    Given a function `fun(X)` where X is a NumPy Array (such as N,ndim sample),
+    a parallel version is ParEval(fun).
+    
+    To directly evaluate with X, do ParEval(fun)(X). 
+    
+    The advantage of returning a callable object rather than this being a 
+    function is that there is no need to use functool.partial if you want to 
+    pass the parallelized function to another.
+    
     Inputs:
     -------
     fun
@@ -583,9 +596,11 @@ class ParEval(object):
     Specify one of
         n_chunks
             How many chunks to split it up into
+            
         n_eval
             How many evaluations per chunk (and split accordingly). Will be
             the upper limit.
+            
         if neither is specified, then n_chunks is set to CPU_COUNT
     
     Options:
@@ -611,6 +626,8 @@ class ParEval(object):
             n_chunks = CPU_COUNT
         self.n_chunks = n_chunks
         self.n_eval = n_eval
+        
+        kwargs['chunksize'] = 1
         
         self.n_min = n_min
         self.kwargs = kwargs
