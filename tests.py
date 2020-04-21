@@ -6,6 +6,7 @@ Some simple tests. Some of these are rough without exact expected results.
 from __future__ import division, print_function, unicode_literals
 
 import parmapper
+parmapper.set_start_method()
 
 import multiprocessing as mp
 import time

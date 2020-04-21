@@ -17,13 +17,13 @@ When **not** to use `parmapper`:
 * Many successive calls to a `map` that would benefit from a common pool (`parmapper` creates and destroys its pool on each call)
 * Desire for advanced parallel topologies
 
-Tested with python 2.7 and 3.3+
+Tested with python 2.7 and 3.3+ (see note about macOS and 3.8+)
 
 ## Install
 
 Install directly from github:
 
-    pip install git+https://github.com/Jwink3101/parmapper
+    python -m pip install git+https://github.com/Jwink3101/parmapper
 
 ## Usage
 
@@ -144,6 +144,40 @@ results = list(parmapper.parmap(do_something,zip(itemsAB,kws),
                              star=True,kwstar=True,
                              args=(itemC,),kwargs={'opt2':False}))
 ```
+
+## macOS and Python 3.8
+
+This tool relies on and assumes `multiprocessing` will use `fork` to create new processes. This is why it is not compatible with Windows. 
+
+However, according to the [Python 3.8 documentation][py3.8]:
+
+> *Changed in version 3.8:* On macOS, the spawn start method is now the default. The fork start method should be considered unsafe as it can lead to crashes of the subprocess. [See bpo-33725](https://bugs.python.org/issue33725).
+
+[py3.8]:https://docs.python.org/3.8/library/multiprocessing.html#contexts-and-start-methods
+
+As such, the start method must be explicitly set when Python loads:
+
+```python
+import multiprocessing as mp
+mp.set_start_method('fork')
+```
+
+Or, call 
+
+```python
+import parmapper as parmap
+parmap.set_start_method()
+```
+
+Or, set `PYTOOLBOX_SET_START=true` environment variable and it will be set as needed upon import. To do this all the time, put the following in your `.bashrc`:
+
+```bash
+export PYTOOLBOX_SET_START=true
+```
+
+Future Python versions may change the defaults further and will have to be considered as they are released.
+
+Note that nothing has *actually* changed making it more or less "safe" to use this method. It is something that has been discovered. While it has worked in practice, use at your own risk.
 
 ## Tips
 

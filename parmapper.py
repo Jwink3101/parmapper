@@ -6,13 +6,13 @@ without requiring a pickleable function (e.g. lambdas).
 """
 from __future__ import print_function, unicode_literals, division
 
-__version__ = '20191002'
+__version__ = '20200421'
 
 import multiprocessing as mp
 import multiprocessing.dummy as mpd
 from threading import Thread
 import threading
-import sys
+import sys,os
 from collections import defaultdict
 import warnings
 import math
@@ -82,7 +82,6 @@ def parmap(fun,seq,N=None,Nt=1,chunksize=1,ordered=True,\
         to ceil(len(seq)/(N*Nt)). If chunksize=-1 and len(sequence) is not
         known, a warning will be emitted and chucksize will be reset to 
         max(chunksize,Nt)
-        
 
     ordered [True] (bool)
         Whether or not to order the results. If False, will return in whatever
@@ -101,7 +100,8 @@ def parmap(fun,seq,N=None,Nt=1,chunksize=1,ordered=True,\
         Widget progress bar.
     
     args [tuple()]
-        Specify additional arguments for the function
+        Specify additional arguments for the function. They are added *after*
+        the input argument
     
     kwargs [dict()]
         Specify additional keyword arguments
@@ -162,7 +162,7 @@ def parmap(fun,seq,N=None,Nt=1,chunksize=1,ordered=True,\
                 ‡ Note the ordering so kwvals takes precedance
 
     Note:
-    ------
+    -----
     Performs SEMI-lazy iteration based on chunksize. It will exhaust the input
     iterator but will yield as results are computed (This is similar to the
     `multiprocessing.Pool().imap` behavior)
@@ -170,7 +170,7 @@ def parmap(fun,seq,N=None,Nt=1,chunksize=1,ordered=True,\
     Explicitly wrap the parmap call in a list(...) to force immediate
     evaluation
 
-    Threads and/or processes:
+    Threads and/or Processes:
     -------------------------
     This tool has the ability to split work amongst python processes
     (via multiprocessing) and python threads (via the multiprocessing.dummy
@@ -184,19 +184,42 @@ def parmap(fun,seq,N=None,Nt=1,chunksize=1,ordered=True,\
 
     Alternatives:
     -------------
-
     This tool allows more data types, can split with threads, has an optional
     progress bar, and has fewer pickling issues, but these come at a small cost. 
     For simple needs, the following may be better:
 
     >>> import multiprocessing as mp
-    >>> pool = mp.Pool(N) # Or mp.Pool() for N=None
-    >>> results = list( pool.imap(fun,seq) ) # or just pool.map
-    >>> pool.close()
+    >>> with mp.Pool(N) as pool:
+    >>>     results = list( pool.imap(fun,seq) ) # or just pool.map
+    
+    Start Methods:
+    --------------
+    * This tool is NOT compatible with Windows, just macOS (see below) 
+      and Linux
+      
+    * on macOS, starting with python3.8, the start method must be explicity set
+      when python starts up. See the [1] for details.
+      
+          >>> import multiprocessing as mp
+          >>> mp.set_start_method('fork')
+    
+      If this has already been set, it will throw a RuntimeError.
+      
+      Alternativly, call the parmap(per).set_start_method()
+    
+      Or, set the PYTOOLBOX_SET_START=true as an enviorment variable and this
+      will be set on module load. For example,
+      
+          export PYTOOLBOX_SET_START=true
+
+    to your .bashrc
+    
+    [1]: https://docs.python.org/3/library/multiprocessing.html#contexts-and-start-methods 
+    
     
     Additional Note
     ---------------
-    For the sake of convienance, a `map=imap=__call__` and
+    For the sake of convienance, a `map = imap = __call__` and
     `close = lamba *a,**k:None` are also added so a parmap function can mimic
     a multiprocessing pool object with duck typing
 
@@ -205,6 +228,18 @@ def parmap(fun,seq,N=None,Nt=1,chunksize=1,ordered=True,\
     __version__
     
     """
+    # Additional Notes:
+    # This currently assumes the starting behavior of multiprocessing for
+    # python 3.8. When 3.9 is released, it may have to be updated again.
+    if sys.platform.lower().startswith('win'):
+        raise RuntimeError('Not compatible with Windows')
+        
+    if sys.platform.startswith('darwin') and \
+       sys.version_info >= (3,8) and \
+       mp.get_start_method(allow_none=True) != 'fork':
+        raise RuntimeError("Must set multiprocessing start_method to 'fork'. "
+                           "Use `set_start_method` or see documentation")
+    
     # Build up a dummy function with args,vals,kwargs, and kwvals
     if kwargs is None:
         kwargs = {}
@@ -214,18 +249,18 @@ def parmap(fun,seq,N=None,Nt=1,chunksize=1,ordered=True,\
         _kw = kwargs.copy()
         try:
             # Check for None before boolean
-            if star is None and kwstar:     # 4
+            if star is None and kwstar:         # 4
                 _kw.update(ss)
-            elif star is None and not kwstar: # 3
+            elif star is None and not kwstar:   # 3
                 pass
-            elif not star and not kwstar:   # 1
+            elif not star and not kwstar:       # 1
                 _args = [ss] + _args
-            elif star and not kwstar:       # 2
+            elif star and not kwstar:           # 2
                 _args = list(ss) + _args    
-            elif not star and kwstar:       # 5
+            elif not star and kwstar:           # 5
                 _args = [ss[0]] + _args
                 _kw.update(ss[1])
-            elif star and kwstar:           # 6
+            elif star and kwstar:               # 6
                 _args = list(ss[0]) + _args
                 _kw.update(ss[1])
             else:
@@ -293,7 +328,7 @@ def parmap(fun,seq,N=None,Nt=1,chunksize=1,ordered=True,\
            out = counter(out)
         for count,item in enumerate(out):
             if isinstance(item,_Exception):
-                item.E.seq_index = count
+                item.E.seq_index = count # Store the index where this happened
                 if not item.infun:
                     exception = 'raise' # reset
                 if exception == 'raise':
@@ -380,11 +415,11 @@ def parmap(fun,seq,N=None,Nt=1,chunksize=1,ordered=True,\
     q_in.join() # Make sure there is nothing left in the queue
     for worker in workers:
         worker.join() # shut it down
-    
 
 # Add dummy methods
 parmap.map = parmap.imap = parmap.__call__
-parmap.close = lambda *a,**k:None
+parmap.close = lambda *a,**k: None
+
 parmap.__doc__ = parmap.__doc__.replace('__version__',__version__)
 
 parmapper = parmap # Rename
@@ -434,7 +469,6 @@ def _worker(fun,q_in,q_out,Nt):
             q_out.put(None)
             q_in.task_done()
             break
-#         for ix in iixs:
         def _ap(ix):
             i,x = ix
             return i, fun(x)
@@ -514,8 +548,7 @@ def _txtbar(count,N,ticks=50,text='Progress'):
     count = int(count+1)
     ticks = min(ticks,N)
     isCount = int(1.0*count%round(1.0*N/ticks)) == 0
-
-
+    
     if not (isCount or count == 1 or count == N):
         return
 
@@ -525,7 +558,6 @@ def _txtbar(count,N,ticks=50,text='Progress'):
 
     if count == 1:
         Nprint = 0
-
     if len(text)>0:
         text +=': '
 
@@ -570,7 +602,7 @@ np = None # will be imported when a ParEval is instantiated
 
 class ParEval(object):
     """
-    Evaluate the *vectoorized* fun(X) (where X is a numpy array) in chunks 
+    Evaluate the *vectorized* fun(X) (where X is a numpy array) in chunks 
     using parmap. If fun(X) is not vectorized, use the regular parmap
     
     Requires numpy
@@ -678,6 +710,22 @@ class _chunker(object):
     def __len__(self):
         return self.len
 
+def set_start_method():
+    if sys.version_info < (3,8):
+        return
+    if mp.get_start_method(allow_none=True) != 'fork':
+        try:
+            mp.set_start_method('fork')
+        except RuntimeError:
+            raise RuntimeError('Cannot change startmethod. Restart Python and try again')
+
+if os.environ.get('PYTOOLBOX_SET_START','false').lower() == 'true' \
+   and sys.version_info >= (3,8) \
+   and sys.platform.startswith('darwin'):
+    set_start_method()
+    import logging
+    logging.debug("Set start method on darwin to 'fork'")
+    
 ################################################################################
 ################################################################################
 ## Below is a simpler version of parmap. It really only serves the purpose of 
@@ -706,6 +754,11 @@ class _chunker(object):
 #     [2]:https://stackoverflow.com/a/16071616/3633154
 #     """
 #     import multiprocessing as mp
+#     import sys
+#     if sys.platform.startswith('darwin') and \
+#        sys.version_info >= (3,8) and \
+#        mp.get_start_method(allow_none=True) != 'fork':
+#         raise RuntimeError("Must set multiprocessing start_method to 'fork'")
 #     if N is None:
 #         N = mp.cpu_count()
 #     def _fun(fun, q_in, q_out):
