@@ -175,6 +175,12 @@ Or, set `PYTOOLBOX_SET_START=true` environment variable and it will be set as ne
 export PYTOOLBOX_SET_START=true
 ```
 
+It is also good to set the following environment variable. Note that this must be set *before* Python starts. (sources: [\[1\]](https://www.wefearchange.org/2018/11/forkmacos.rst.html), \[[2\]](https://stackoverflow.com/q/50168647/3633154) ):
+
+```bash
+export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
+```
+
 Future Python versions may change the defaults further and will have to be considered as they are released.
 
 Note that nothing has *actually* changed making it more or less "safe" to use this method. It is something that has been discovered. While it has worked in practice, use at your own risk.

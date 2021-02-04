@@ -6,7 +6,7 @@ without requiring a pickleable function (e.g. lambdas).
 """
 from __future__ import print_function, unicode_literals, division
 
-__version__ = '20200421'
+__version__ = '20210204.0'
 
 import multiprocessing as mp
 import multiprocessing.dummy as mpd
@@ -36,7 +36,7 @@ if sys.version_info[0] > 2:
 else:
     from itertools import imap
 
-CPU_COUNT = mp.cpu_count()
+CPU_COUNT = os.cpu_count()
 
 class _Exception(object):
     """Storage of an exception (and easy detection)"""
@@ -44,11 +44,15 @@ class _Exception(object):
         self.E = E
         self.infun = infun
 
-def parmap(fun,seq,N=None,Nt=1,chunksize=1,ordered=True,\
-                daemon=False,progress=False,
-                args=(),kwargs=None,
-                star=False,kwstar=False,
-                exception=None):
+def parmap(fun,seq,
+           N=None,Nt=1,
+           chunksize=1,
+           ordered=True,
+           daemon=True,
+           progress=False,
+           args=(),kwargs=None,
+           star=False,kwstar=False,
+           exception=None):
     """
     parmap -- Simple parallel mapper that can split amongst processes (N)
               and threads (Nt) (within the processes).
@@ -87,7 +91,7 @@ def parmap(fun,seq,N=None,Nt=1,chunksize=1,ordered=True,\
         Whether or not to order the results. If False, will return in whatever
         order they finished.
 
-    daemon [False] (bool)
+    daemon [True] (bool)
         Sets the multiprocessing `daemon` flag. If  True, can not spawn child
         processes (i.e. cannot nest parmap) but should allow for CTRL+C type
         stopping. Supposedly, there may be issues with CTRL+C with it set to
@@ -148,18 +152,18 @@ def parmap(fun,seq,N=None,Nt=1,chunksize=1,ordered=True,\
     they main function call. The `val` (singular), `vals` (sequence/tuple of 
     values), and `kwvals` are set via the sequence.
     
-    | star  | kwstar | expected item | function args  | function keywords   |
-    |-------|--------|---------------|----------------|---------------------|
-    | False | False  | val           | *((val,)+args) | **kwargs            |†
-    | True  | False  | vals          | *(vals+args)   | **kwargs            |
-    | None  | False  | ---           | *args          | **kwargs            |°
-    | None  | True   | ---           | *args          | **dj(kwargs,kwvals) |‡
-    | False | True   | val,kwval     | *((val,)+args) | **dj(kwargs,kwvals) |‡
-    | True  | True   | vals,kwval    | *(vals+args)   | **dj(kwargs,kwvals) |‡
+    | star  | kwstar | expected   | args           | kw args             |   |
+    |-------|--------|------------|----------------|---------------------|---|
+    | False | False  | val        | *((val,)+args) | **kwargs            | A |
+    | True  | False  | vals       | *(vals+args)   | **kwargs            |   |
+    | None  | False  | ---        | *args          | **kwargs            | B |
+    | None  | True   | ---        | *args          | **dj(kwargs,kwvals) | C |
+    | False | True   | val,kwval  | *((val,)+args) | **dj(kwargs,kwvals) | C |
+    | True  | True   | vals,kwval | *(vals+args)   | **dj(kwargs,kwvals) | C |
                                                         
-                † Default
-                ° If kwargs and args are empty, basically calls with nothing
-                ‡ Note the ordering so kwvals takes precedance
+                A: Default
+                B: If kwargs and args are empty, basically calls with nothing
+                C: Note the ordering so kwvals takes precedance
 
     Note:
     -----
@@ -211,11 +215,16 @@ def parmap(fun,seq,N=None,Nt=1,chunksize=1,ordered=True,\
       will be set on module load. For example,
       
           export PYTOOLBOX_SET_START=true
+    
+      Also, set the following to prevent issues [2][3]
+    
+          export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
 
     to your .bashrc
     
     [1]: https://docs.python.org/3/library/multiprocessing.html#contexts-and-start-methods 
-    
+    [2]: https://www.wefearchange.org/2018/11/forkmacos.rst.html
+    [3]: https://stackoverflow.com/q/50168647/3633154
     
     Additional Note
     ---------------
