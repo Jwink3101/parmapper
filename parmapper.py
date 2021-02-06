@@ -6,7 +6,7 @@ without requiring a pickleable function (e.g. lambdas).
 """
 from __future__ import print_function, unicode_literals, division
 
-__version__ = '20210204.0'
+__version__ = '20210206.0'
 
 import multiprocessing as mp
 import multiprocessing.dummy as mpd
@@ -327,41 +327,37 @@ def parmap(fun,seq,
     
     # Handle N=1 without any multiprocessing
     if N == 1:
-        if Nt == 1:
-            out = imap(_fun,seq)
-        else:
-            pool = mpd.Pool(Nt)      # thread pools don't have the pickle issues
-            out = pool.imap(_fun,seq)
+        try:
+            if Nt == 1:
+                out = imap(_fun,seq)
+            else:
+                pool = mpd.Pool(Nt)      # thread pools don't have the pickle issues
+                out = pool.imap(_fun,seq)
 
-        if progress:
-           out = counter(out)
-        for count,item in enumerate(out):
-            if isinstance(item,_Exception):
-                item.E.seq_index = count # Store the index where this happened
-                if not item.infun:
-                    exception = 'raise' # reset
-                if exception == 'raise':
-                    raise item.E
-                elif exception == 'return':
-                    item = item.E
-                elif exception == 'proc':
-                    pass
-                else:
-                    raise ValueError("Unrecognized `exception` setting '{}'".format(exception))
-            yield item
-
-        if Nt > 1:
-            pool.close()
+            if progress:
+               out = counter(out)
+            for count,item in enumerate(out):
+                if isinstance(item,_Exception):
+                    item.E.seq_index = count # Store the index where this happened
+                    if not item.infun:
+                        exception = 'raise' # reset
+                    if exception == 'raise':
+                        raise item.E
+                    elif exception == 'return':
+                        item = item.E
+                    elif exception == 'proc':
+                        pass
+                    else:
+                        raise ValueError("Unrecognized `exception` setting '{}'".format(exception))
+                yield item
+        finally:
+            if Nt > 1:
+                pool.close()
         return
     
     q_in = mp.JoinableQueue() # Will need to `join` later to make sure is empty
     q_out = mp.Queue()
-
-    # Start the workers
     workers = [mp.Process(target=_worker, args=(_fun, q_in, q_out,Nt)) for _ in range(N)]
-    for worker in workers:
-        worker.daemon = daemon
-        worker.start()
 
     # Create a separate thread to add to the queue in the background
     def add_to_queue():
@@ -371,10 +367,7 @@ def parmap(fun,seq,
         # Once (if ever) it is exhausted, send None to close workers
         for _ in xrange(N):
             q_in.put(None)
-
-    add_to_queue_thread = Thread(target=add_to_queue)
-    add_to_queue_thread.start()
-
+    
     # Define a generator that will pull from the q_out and then run through
     # the rest of our generator/iterator chain for progress and ordering
     def queue_getter():
@@ -387,43 +380,51 @@ def parmap(fun,seq,
                 continue
             for o in out: # yield from out
                 yield o
-
-    # Chain generators on output
-    out = queue_getter()
-    if progress:
-        out = counter(out)
-
-    if ordered:
-        out = _sort_generator_unique_integers(out,key=lambda a:a[0])
-
-    # Return items
-    for item in out:
-        count = item[0]
-        item = item[1]
-        if isinstance(item,_Exception):
-            item.E.seq_index = count
-            if not item.infun:
-                exception = 'raise' # reset
-                
-            if exception == 'raise':
-                for worker in workers: 
-                    worker.terminate()
-                raise item.E
-            elif exception == 'return':
-                item = item.E
-            elif exception == 'proc':
-                pass
-            else:
-                for worker in workers: 
-                    worker.terminate()
-                raise ValueError("Unrecognized `exception` setting '{}'".format(exception))
-        yield item
+    try:
+        # Start the workers
+        for worker in workers:
+            worker.daemon = daemon
+            worker.start()
     
-    # Clean up threads and processes. Make sure the queue is exhausted
-    add_to_queue_thread.join() # Make sure we've exhausted the input
-    q_in.join() # Make sure there is nothing left in the queue
-    for worker in workers:
-        worker.join() # shut it down
+        add_to_queue_thread = Thread(target=add_to_queue)
+        add_to_queue_thread.start()
+    
+        # Chain generators on output
+        out = queue_getter()
+        if progress:
+            out = counter(out)
+
+        if ordered:
+            out = _sort_generator_unique_integers(out,key=lambda a:a[0])
+
+        # Return items
+        for item in out:
+            count = item[0]
+            item = item[1]
+            if isinstance(item,_Exception):
+                item.E.seq_index = count
+                if not item.infun:
+                    exception = 'raise' # reset
+                
+                if exception == 'raise':
+                    for worker in workers: 
+                        worker.terminate()
+                    raise item.E
+                elif exception == 'return':
+                    item = item.E
+                elif exception == 'proc':
+                    pass
+                else:
+                    for worker in workers: 
+                        worker.terminate()
+                    raise ValueError("Unrecognized `exception` setting '{}'".format(exception))
+            yield item
+    finally:
+        # Clean up threads and processes. Make sure the queue is exhausted
+        add_to_queue_thread.join() # Make sure we've exhausted the input
+        q_in.join() # Make sure there is nothing left in the queue
+        for worker in workers:
+            worker.join() # shut it down
 
 # Add dummy methods
 parmap.map = parmap.imap = parmap.__call__
