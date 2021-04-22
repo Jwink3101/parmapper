@@ -6,7 +6,7 @@ without requiring a pickleable function (e.g. lambdas).
 """
 from __future__ import print_function, unicode_literals, division
 
-__version__ = '20210206.0'
+__version__ = '20210422.0'
 
 import multiprocessing as mp
 import multiprocessing.dummy as mpd
