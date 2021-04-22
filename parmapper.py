@@ -36,7 +36,7 @@ if sys.version_info[0] > 2:
 else:
     from itertools import imap
 
-CPU_COUNT = os.cpu_count()
+CPU_COUNT = mp.cpu_count()
 
 class _Exception(object):
     """Storage of an exception (and easy detection)"""
