@@ -6,7 +6,7 @@ without requiring a pickleable function (e.g. lambdas).
 """
 from __future__ import print_function, unicode_literals, division
 
-__version__ = '20220210.0'
+__version__ = '20220211.0'
 
 import multiprocessing as mp
 import multiprocessing.dummy as mpd
@@ -50,6 +50,7 @@ def parmap(fun,seq,
            ordered=True,
            daemon=True,
            progress=False,
+           total=None,
            args=(),kwargs=None,
            star=False,kwstar=False,
            exception=None):
@@ -97,11 +98,12 @@ def parmap(fun,seq,
         stopping. Supposedly, there may be issues with CTRL+C with it set to
         False. Use at your own risk
 
-    progress [False] (bool)
-        Display a progress bar or counter.
-        Warning: Inconsistant in iPython/Jupyter notebooks and may clear
-        other printed content. Instead, specify as 'nb' to use a Jupyter 
-        Widget progress bar.
+    progress [False] (bool or str)
+        Display a progress bar or counter. If str, will be used as the text.
+    
+    total [None]
+        Total number of items. If None (default) will try to use len(seq) if possible.
+        If not possible, will still work!
     
     args [tuple()]
         Specify additional arguments for the function. They are added *after*
@@ -288,11 +290,12 @@ def parmap(fun,seq,
             return _Exception(E)
             # It would be great to include all of sys.exc_info() but tracebacks
             # cannot be pickled.
-            
-    try:
-        tot = len(seq)
-    except TypeError:
-        tot = None
+    
+    if total is None:   
+        try:
+            total = len(seq)
+        except TypeError:
+            total = None
 
     N = CPU_COUNT if N is None else N
         
@@ -300,30 +303,26 @@ def parmap(fun,seq,
         exception = 'raise' if N>1 else 'proc'
 
     if chunksize == -1:
-        if tot is None:
+        if total is None:
             warnings.warn('chunksize=-1 does not work when len(seq) is not known')
         else:
-            chunksize = math.ceil(tot/(N*Nt))
+            chunksize = math.ceil(total/(N*Nt))
     chunksize = max(chunksize,Nt) # Reset
 
     # Consider resetting N
-    if tot is not None:
-        N = min(N,tot//chunksize)
+    if total is not None:
+        N = min(N,total//chunksize)
+        N = 1 if N < 1 else N
 
     # Build a counter iterator based on settings and tqdm
+    
+    if progress is True: # Set to str iff true but not named
+        progress='parmap: '
+        
     if tqdm is None:
-        if   isinstance(progress,(str,unicode))\
-         and progress.lower() in ['jupyter','notebook','nb']:
-            counter = partial(_counter_nb,tot=tot)
-        else:
-            counter = partial(_counter,tot=tot)
+        counter = partial(_counter,total=total,text=progress)
     else:
-        if   isinstance(progress,(str,unicode))\
-         and progress.lower() in ['jupyter','notebook','nb']\
-         and hasattr(tqdm,'tqdm_notebook'):
-            counter = partial(tqdm.tqdm_notebook,total=tot)
-        else:
-            counter = partial(tqdm.tqdm,total=tot) # Set the total since tqdm won't be able to get it.
+        counter = partial(tqdm.tqdm,total=total,desc=progress) # Set the total since tqdm won't be able to get it.
     
     # Handle N=1 without any multiprocessing
     if N == 1:
@@ -437,7 +436,8 @@ parmapper = parmap # Rename
 class ReturnProcess(mp.Process):
     """
     Like a regular multiprocessing Process except when you `join`, it returns 
-    the function result. And it assumes a target is always passed
+    the function result. And it assumes a target is always passed. Also returns
+    itself with start() to make simpler
     
     Inputs:
     -------
@@ -453,19 +453,17 @@ class ReturnProcess(mp.Process):
     
     Usage:
     ------
-    Replace: (notice different functions)
-        >>> res1 = my_slow_fun1(arg1,kw=arg2)
-        >>> res2 = my_slow_fun2(arg3,kw=arg4)
+    Replace: 
+        >>> res1 = slow(arg1,kw=arg2)
+        >>> res2 = slower(arg3,kw=arg4)
     
     with
-        >>> p1 = ReturnProcess(my_slow_fun1,args=(arg1,),kwargs={'kw':arg2})
-        >>> p1.start()
-        >>> p2 = ReturnProcess(my_slow_fun2,args=(arg3,),kwargs={'kw':arg4})
-        >>> p2.start()
+        >>> p1 = ReturnProcess(slow,args=(arg1,),kwargs={'kw':arg2}).start()
+        >>> p2 = ReturnProcess(slower,args=(arg3,),kwargs={'kw':arg4}).start()
         >>> res1 = p1.join()
         >>> res2 = p2.join()
     
-    So one line becomes 3 but they can happen at the same time
+    So one line becomes 2 (or 3) but they can happen at the same time
     """
     def __init__(self,target=None,exception='raise',**kwargs):
         if not target:
@@ -490,6 +488,10 @@ class ReturnProcess(mp.Process):
         
         self.child_conn.send(res)
     
+    def start(self):
+        super(ReturnProcess, self).start()
+        return self
+    
     def join(self,**kwargs):
         super(ReturnProcess, self).join(**kwargs)
         res = self.parent_conn.recv()
@@ -501,36 +503,16 @@ class ReturnProcess(mp.Process):
         else: # return
             return res.E
 
-def _counter(items,tot=None):
+def _counter(items,total=None,text=''):
     for ii,item in enumerate(items):
-        if tot is not None:
-            _txtbar(ii,tot,ticks=50,text='')
+        if total is not None:
+            _txtbar(ii,total,ticks=50,text=text)
         else:
-            txt = '{}'.format(ii+1)
+            txt = '{}: {}'.format(text,ii+1)
             print('\r%s' % txt,end='')
             sys.stdout.flush()
         yield item
 
-def _counter_nb(items,tot=None):
-    from ipywidgets import IntProgress,IntText
-    from IPython.display import display
-    
-    if tot is not None:
-        g = IntText(value=0,description='total = %d' % tot)
-        f = IntProgress(min=0,max=tot)
-        display(f)
-        g.desription='hi'
-
-    else:
-        g = IntText(value=0)
-        f = None
-
-    display(g)
-    for ii,item in enumerate(items):
-        if f:
-            f.value += 1 
-        g.value+=1
-        yield item
 
 def _worker(fun,q_in,q_out,Nt):
     """ This actually runs everything including threadpools"""
@@ -639,8 +621,8 @@ def _txtbar(count,N,ticks=50,text='Progress'):
         text +=': '
 
     txt = '{:s}{:s}{:s} : {:3d}%  '.format(text,'#'*Npound,'-'*Nspace,Nprint)
-    print('\r%s' % txt,end='')
-    sys.stdout.flush()
+    print('\r%s' % txt,end='',file=sys.stderr)
+    sys.stderr.flush()
 
 technical_details = """\
 This code uses iterators/generators to handle and distribute the workload.

@@ -4,19 +4,19 @@
 
 When to use `parmapper`: (*roughly* in order)
 
+* Simple and easy with minimal code (no boilerplate) is preferred.
 * non-pickleable functions such as `lambda` and in some classes
 * common interface to threads and/or processes
-* Ability to specify additional arguments and keywords without `partial` or wrappers (though, since you can parallelize `lambda`, this isn't critical)
-* Ability to pass a sequence of keywords (see `kwstar` mode). 
-* no desire for boilerplate code or management of processes and pools
-* integration with tools such as progress bars
+* Ability to specify additional arguments and keywords without `partial` or wrappers. (see `args`)
+* Ability to pass a sequence of keywords (see `kwstar` mode) and/or arguments (see `star` mode). 
+* Integration with tools such as progress bars
 
 When **not** to use `parmapper`:
 
 * You use Windows or another platform that doesn't support `fork` mode.
     * See below for notes on macOS
     * Works on Linux
-* absolute performance is key! (`parmapper` has a *slight* overhead but it is minimal)
+* Absolute performance is key! (`parmapper` has a *slight* overhead but it is minimal)
 * Many successive calls to a `map` that would benefit from a common pool (`parmapper` creates and destroys its pool on each call)
 * Desire for advanced parallel topologies
 
@@ -30,7 +30,7 @@ Install directly from github:
 
 ## Usage
 
-`parmapper` can be used anywhere you would use a regular `imap` or `map` function or a `multiprocessing.Pool().map` (or `imap`, or `starmap`, etc). Note that `parmapper` performs *semi*-lazy evaluation. The input sequence is evaluated but results are cached until the `parmapper` is iterated. This is the same behavior as `multiprocess.Pool().imap`.
+`parmapper` can be used anywhere you would use a regular `imap` (or `map`), a `multiprocessing.Pool().map` (or `imap`, or `starmap`, etc), or `concurrent.futures.ProcessPoolExecutor` (or `ThreadPoolExecutor`). Note that `parmapper` performs *semi*-lazy evaluation. The input sequence is evaluated but results are cached until the `parmapper` is iterated. This is the same behavior as `multiprocess.Pool().imap`.
 
 Consider a simple function:
 
@@ -60,8 +60,6 @@ results = list(map(proc,items))
 # Parallel
 results = list(parmapper.parmap(proc,items))
 ```
-
-The functions can still use variables in scope but they are, for all intents and purposes, read-only. You can only modify them on the
 
 ## star and kwstar
 
@@ -186,6 +184,41 @@ export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
 Future Python versions may change the defaults further and will have to be considered as they are released.
 
 Note that nothing has *actually* changed making it more or less "safe" to use this method. It is something that has been discovered. While it has worked in practice, use at your own risk.
+
+## Additional Tools
+
+`parmapper` also comes with `ReturnProcess` and `ParEval`.
+
+### `ReturnProcess`
+
+This is a simple function to let you call different functions in the background and wait for them to finished. It is basically a `multiprocessing.Process` object that returns the result on `join()`.
+
+Replace: 
+```python
+res1 = slow(arg1,kw=arg2)
+res2 = slower(arg3,kw=arg4)
+```
+with:
+```python
+p1 = ReturnProcess(slow,args=(arg1,),kwargs={'kw':arg2}).start()
+p2 = ReturnProcess(slower,args=(arg3,),kwargs={'kw':arg4}).start()
+res1,res2 = p1.join() , p2.join()
+```
+### `ParEval`
+
+This tool is aimed solely at NumPy functions that have the signature `fun(X)` where `X` is (N,ndim). It will split `X` appropriately and join at the end.
+
+Replace:
+```python
+results = fun(X)
+```
+with:
+```python
+parfun = ParEval(fun)
+results = parfun(X)
+```
+
+Must have NumPy installed.
 
 ## Tips
 
