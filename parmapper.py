@@ -6,7 +6,7 @@ without requiring a pickleable function (e.g. lambdas).
 """
 from __future__ import print_function, unicode_literals, division
 
-__version__ = '20210422.0'
+__version__ = '20220210.0'
 
 import multiprocessing as mp
 import multiprocessing.dummy as mpd
@@ -433,6 +433,73 @@ parmap.close = lambda *a,**k: None
 parmap.__doc__ = parmap.__doc__.replace('__version__',__version__)
 
 parmapper = parmap # Rename
+
+class ReturnProcess(mp.Process):
+    """
+    Like a regular multiprocessing Process except when you `join`, it returns 
+    the function result. And it assumes a target is always passed
+    
+    Inputs:
+    -------
+    target
+        Function target
+        
+    exception ['raise']
+        Choose how to handle an exception in a child process
+        
+        'raise'     : [Default] raise the exception (outside of the Process). 
+        'return'    : Return the Exception instead of raising it.
+        'proc'      : Raise the exception inside the process. NOT RECOMMENDED
+    
+    Usage:
+    ------
+    Replace: (notice different functions)
+        >>> res1 = my_slow_fun1(arg1,kw=arg2)
+        >>> res2 = my_slow_fun2(arg3,kw=arg4)
+    
+    with
+        >>> p1 = ReturnProcess(my_slow_fun1,args=(arg1,),kwargs={'kw':arg2})
+        >>> p1.start()
+        >>> p2 = ReturnProcess(my_slow_fun2,args=(arg3,),kwargs={'kw':arg4})
+        >>> p2.start()
+        >>> res1 = p1.join()
+        >>> res2 = p2.join()
+    
+    So one line becomes 3 but they can happen at the same time
+    """
+    def __init__(self,target=None,exception='raise',**kwargs):
+        if not target:
+            raise ValueError('Must specify a target')
+        if exception not in {'raise','return','proc'}:
+            raise ValueError("exception must be in {'raise','return','proc'}")
+        self.exception = exception
+        
+        self.target = target
+        self.parent_conn,self.child_conn = mp.Pipe(duplex=False)
+        super(ReturnProcess, self).__init__(target=self._target,**kwargs)
+    
+    def _target(self,*args,**kwargs):
+        
+        if self.exception == 'proc':
+            res = self.target(*args,**kwargs)       
+        else:
+            try:
+                res = self.target(*args,**kwargs)
+            except Exception as E:
+                res = _Exception(E)
+        
+        self.child_conn.send(res)
+    
+    def join(self,**kwargs):
+        super(ReturnProcess, self).join(**kwargs)
+        res = self.parent_conn.recv()
+        if not isinstance(res,_Exception):
+            return res
+    
+        if self.exception == 'raise':
+            raise res.E
+        else: # return
+            return res.E
 
 def _counter(items,tot=None):
     for ii,item in enumerate(items):
